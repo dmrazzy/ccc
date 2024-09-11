@@ -62,8 +62,9 @@ const MAINNET_DECODERS = {
 
 export function getTestnetDecoder(
   dobVersion: "DOB0" | "DOB1",
-  locationType: "code_hash" | "type_id" | "type_script",
+  locationType?: "code_hash" | "type_id" | "type_script",
 ): Decoder {
+  locationType = locationType || "code_hash";
   const decoder = TESTNET_DECODERS[dobVersion][locationType];
   if (decoder === null) {
     throw new Error(
@@ -75,8 +76,9 @@ export function getTestnetDecoder(
 
 export function getMainnetDecoder(
   dobVersion: "DOB0" | "DOB1",
-  locationType: "code_hash" | "type_id" | "type_script",
+  locationType?: "code_hash" | "type_id" | "type_script",
 ): Decoder {
+  locationType = locationType || "code_hash";
   const decoder = MAINNET_DECODERS[dobVersion][locationType];
   if (decoder === null) {
     throw new Error(

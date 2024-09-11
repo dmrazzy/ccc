@@ -1,11 +1,4 @@
-import {
-  CellInput,
-  Hex,
-  KnownScript,
-  Script,
-  Signer,
-  Transaction,
-} from "@ckb-ccc/core";
+import { ccc } from "@ckb-ccc/core";
 import {
   assembleCreateSporeAction,
   assembleMeltSporeAction,
@@ -16,11 +9,15 @@ import {
 } from "../advanced";
 import { packRawSporeData, SporeData } from "../codec";
 import {
-  balanceAndSignTransaction,
   computeTypeId,
   injectOneCapacityCell,
   searchOneCellByLock,
 } from "../helper";
+import {
+  buildProcotolCelldep,
+  buildProtoclScript as buildProtocolScript,
+  SporeScriptInfo,
+} from "../predefined";
 
 /**
  * Create one or more Spore cells with the specified Spore data.
@@ -31,26 +28,26 @@ import {
  *   - lockProxy: put a cell that uses the same lock from Cluster cell in both Inputs and Outputs
  *   - clusterCell: directly put Cluster cell in Inputs and Outputs
  *   - skip: skip to provide Cluster authority, users should handle it mannually
+ * @param sporeScriptInfo the script info of Spore cell, if not provided, the default script info will be used
  * @param tx the transaction skeleton, if not provided, a new one will be created
- * @param balanceAndSign whether to balance and sign the transaction, default is false
  * @returns a new transaction that contains created Spore cells
  */
 export async function createSporeCells(params: {
-  signer: Signer;
+  signer: ccc.Signer;
   sporeDataCollection: {
     sporeData: SporeData;
-    sporeOwner?: Script;
+    sporeOwner?: ccc.ScriptLike;
   }[];
   clusterMode: "lockProxy" | "clusterCell" | "skip";
-  tx?: Transaction;
-  balanceAndSign?: boolean;
-}): Promise<Transaction> {
-  const { signer, sporeDataCollection, tx, balanceAndSign, clusterMode } =
+  sporeScriptInfo?: SporeScriptInfo;
+  tx?: ccc.Transaction;
+}): Promise<ccc.Transaction> {
+  const { signer, sporeDataCollection, tx, clusterMode, sporeScriptInfo } =
     params;
 
   // prepare transaction
   let actions = [];
-  let txSkeleton = tx || Transaction.from({});
+  let txSkeleton = ccc.Transaction.from(tx ?? {});
   if (txSkeleton.inputs.length === 0) {
     txSkeleton = await injectOneCapacityCell(signer, txSkeleton);
   }
@@ -59,10 +56,11 @@ export async function createSporeCells(params: {
   // build spore cell
   for (const { sporeData, sporeOwner } of sporeDataCollection) {
     const sporeId = computeTypeId(txSkeleton, txSkeleton.outputs.length);
-    const sporeTypeScript = await Script.fromKnownScript(
+    const sporeTypeScript = buildProtocolScript(
       signer.client,
-      KnownScript.Spore,
+      "spore",
       sporeId,
+      sporeScriptInfo,
     );
     const packedSporeData = packRawSporeData(sporeData);
     txSkeleton.addOutput(
@@ -85,20 +83,15 @@ export async function createSporeCells(params: {
             signer.client,
           );
           if (!lockProxyInputIndex) {
-            const clusterLockProxyCell = await searchOneCellByLock(
-              signer.client,
-              clusterLock,
-            );
+            const clusterLockProxyCell = await searchOneCellByLock(signer);
             if (!clusterLockProxyCell) {
               throw new Error("Cluster lock proxy cell not found");
             }
             txSkeleton.inputs.push(
-              new CellInput(
-                clusterLockProxyCell.outPoint,
-                BigInt(0),
-                clusterLockProxyCell.cellOutput,
-                clusterLockProxyCell.outputData,
-              ),
+              ccc.CellInput.from({
+                previousOutput: clusterLockProxyCell.outPoint,
+                ...clusterLockProxyCell,
+              }),
             );
           }
           const lockProxyOutputIndex = txSkeleton.outputs.findIndex(
@@ -113,19 +106,17 @@ export async function createSporeCells(params: {
           break;
         }
         case "clusterCell": {
-          const clusterInput = new CellInput(
-            clusterCell.outPoint,
-            BigInt(0),
-            clusterCell.cellOutput,
-            clusterCell.outputData,
-          );
+          const clusterInput = ccc.CellInput.from({
+            previousOutput: clusterCell.outPoint,
+            ...clusterCell,
+          });
           txSkeleton.inputs.push(clusterInput);
           txSkeleton.witnesses.push("0x");
           txSkeleton.addOutput(clusterCell.cellOutput, clusterCell.outputData);
           txSkeleton.addCellDeps(clusterCelldep);
-          txSkeleton.addCellDepsOfKnownScripts(
+          txSkeleton.addCellDepInfos(
             signer.client,
-            KnownScript.Cluster,
+            buildProcotolCelldep(signer.client, "cluster", sporeScriptInfo),
           );
           const transferCluster = assembleTransferClusterAction(
             clusterCell.cellOutput,
@@ -135,6 +126,7 @@ export async function createSporeCells(params: {
           break;
         }
         case "skip": {
+          // nothing to do here
         }
       }
     }
@@ -145,13 +137,11 @@ export async function createSporeCells(params: {
   }
 
   // complete celldeps and cobuild actions
-  txSkeleton.addCellDepsOfKnownScripts(signer.client, KnownScript.Spore);
+  await txSkeleton.addCellDepInfos(
+    signer.client,
+    buildProcotolCelldep(signer.client, "spore", sporeScriptInfo),
+  );
   txSkeleton = injectCommonCobuildProof(txSkeleton, actions);
-
-  // balance and sign if specified
-  if (balanceAndSign) {
-    txSkeleton = await balanceAndSignTransaction(signer, txSkeleton);
-  }
 
   return txSkeleton;
 }
@@ -161,31 +151,32 @@ export async function createSporeCells(params: {
  *
  * @param signer who takes the responsibility to balance and sign the transaction
  * @param sporeIdCollection sporeId with its new owner
+ * @param sporeScriptInfo the script info of Spore cell, if not provided, the default script info will be used
  * @param tx the transaction skeleton, if not provided, a new one will be created
- * @param balanceAndSign whether to balance and sign the transaction, default is false
  * @returns a new transaction that contains transferred Spore cells
  */
 export async function transferSporeCells(params: {
-  signer: Signer;
+  signer: ccc.Signer;
   sporeIdCollection: {
-    sporeId: Hex;
-    sporeOwner: Script;
+    sporeId: ccc.Hex;
+    sporeOwner: ccc.ScriptLike;
   }[];
-  tx?: Transaction;
-  balanceAndSign?: boolean;
-}): Promise<Transaction> {
-  const { signer, sporeIdCollection, tx, balanceAndSign } = params;
+  sporeScriptInfo?: SporeScriptInfo;
+  tx?: ccc.TransactionLike;
+}): Promise<ccc.Transaction> {
+  const { signer, sporeIdCollection, tx, sporeScriptInfo } = params;
 
   // prepare transaction
   let actions = [];
-  let txSkeleton = tx || Transaction.from({});
+  let txSkeleton = ccc.Transaction.from(tx ?? {});
 
   // build spore cell
   for (const { sporeId, sporeOwner } of sporeIdCollection) {
-    const sporeTypeScript = await Script.fromKnownScript(
+    const sporeTypeScript = buildProtocolScript(
       signer.client,
-      KnownScript.Spore,
+      "spore",
       sporeId,
+      sporeScriptInfo,
     );
     const sporeCell =
       await signer.client.findSingletonCellByType(sporeTypeScript);
@@ -193,12 +184,10 @@ export async function transferSporeCells(params: {
       throw new Error("Spore cell not found of sporeId: " + sporeId);
     }
     txSkeleton.inputs.push(
-      new CellInput(
-        sporeCell.outPoint,
-        BigInt(0),
-        sporeCell.cellOutput,
-        sporeCell.outputData,
-      ),
+      ccc.CellInput.from({
+        previousOutput: sporeCell.outPoint,
+        ...sporeCell,
+      }),
     );
     txSkeleton.witnesses.push("0x");
     txSkeleton.addOutput(
@@ -218,13 +207,11 @@ export async function transferSporeCells(params: {
   }
 
   // complete celldeps and cobuild actions
-  txSkeleton.addCellDepsOfKnownScripts(signer.client, KnownScript.Spore);
+  await txSkeleton.addCellDepInfos(
+    signer.client,
+    buildProcotolCelldep(signer.client, "spore", sporeScriptInfo),
+  );
   txSkeleton = injectCommonCobuildProof(txSkeleton, actions);
-
-  // balance and sign if specified
-  if (balanceAndSign) {
-    txSkeleton = await balanceAndSignTransaction(signer, txSkeleton);
-  }
 
   return txSkeleton;
 }
@@ -234,28 +221,29 @@ export async function transferSporeCells(params: {
  *
  * @param signer who takes the responsibility to balance and sign the transaction
  * @param sporeIdCollection collection of sporeId to be melted
+ * @param sporeScriptInfo the script info of Spore cell, if not provided, the default script info will be used
  * @param tx the transaction skeleton, if not provided, a new one will be created
- * @param balanceAndSign whether to balance and sign the transaction, default is false
  * @returns a new transaction that contains melted Spore cells
  */
 export async function meltSporeCells(params: {
-  signer: Signer;
-  sporeIdCollection: Hex[];
-  tx?: Transaction;
-  balanceAndSign?: boolean;
-}): Promise<Transaction> {
-  const { signer, sporeIdCollection, tx, balanceAndSign } = params;
+  signer: ccc.Signer;
+  sporeIdCollection: ccc.Hex[];
+  sporeScriptInfo?: SporeScriptInfo;
+  tx?: ccc.TransactionLike;
+}): Promise<ccc.Transaction> {
+  const { signer, sporeIdCollection, tx, sporeScriptInfo } = params;
 
   // prepare transaction
   let actions = [];
-  let txSkeleton = tx || Transaction.from({});
+  let txSkeleton = ccc.Transaction.from(tx ?? {});
 
   // build spore cell
   for (const sporeId of sporeIdCollection) {
-    const sporeTypeScript = await Script.fromKnownScript(
+    const sporeTypeScript = buildProtocolScript(
       signer.client,
-      KnownScript.Spore,
+      "spore",
       sporeId,
+      sporeScriptInfo,
     );
     const sporeCell =
       await signer.client.findSingletonCellByType(sporeTypeScript);
@@ -263,12 +251,10 @@ export async function meltSporeCells(params: {
       throw new Error("Spore cell not found of sporeId: " + sporeId);
     }
     txSkeleton.inputs.push(
-      new CellInput(
-        sporeCell.outPoint,
-        BigInt(0),
-        sporeCell.cellOutput,
-        sporeCell.outputData,
-      ),
+      ccc.CellInput.from({
+        previousOutput: sporeCell.outPoint,
+        ...sporeCell,
+      }),
     );
     txSkeleton.witnesses.push("0x");
 
@@ -277,13 +263,11 @@ export async function meltSporeCells(params: {
   }
 
   // complete celldleps cobuild actions
-  txSkeleton.addCellDepsOfKnownScripts(signer.client, KnownScript.Spore);
+  await txSkeleton.addCellDepInfos(
+    signer.client,
+    buildProcotolCelldep(signer.client, "spore", sporeScriptInfo),
+  );
   txSkeleton = injectCommonCobuildProof(txSkeleton, actions);
-
-  // balance and sign if specified
-  if (balanceAndSign) {
-    txSkeleton = await balanceAndSignTransaction(signer, txSkeleton);
-  }
 
   return txSkeleton;
 }

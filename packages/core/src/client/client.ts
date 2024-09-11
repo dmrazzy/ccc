@@ -49,8 +49,6 @@ export enum KnownScript {
   NervosDao = "NervosDao",
   TypeBurn = "TypeBurn",
   LockProxy = "LockProxy",
-  Spore = "Spore",
-  Cluster = "Cluster",
 }
 
 /**
