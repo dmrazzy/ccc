@@ -37,7 +37,9 @@
     "prettier-plugin-organize-imports": "^3.2.4",
     "rimraf": "^5.0.5",
     "typescript": "^5.4.5",
-    "typescript-eslint": "^7.7.0"
+    "typescript-eslint": "^7.7.0",
+    "vitest": "^1.6.0",
+    "dotenv": "^16.4.5"
   },
   "publishConfig": {
     "access": "public"

@@ -23,14 +23,15 @@ export async function injectOneCapacityCell(
     const address = await signer.getRecommendedAddress();
     throw new Error("No live cell found in address: " + address);
   }
-  tx.inputs = tx.inputs || [];
-  tx.inputs.push(
+  let txSkeleton = ccc.Transaction.from(tx);
+  txSkeleton.inputs.push(
     ccc.CellInput.from({
       previousOutput: liveCell.outPoint,
       ...liveCell,
     }),
   );
-  return ccc.Transaction.from(tx);
+  txSkeleton.witnesses.push("0x");
+  return txSkeleton;
 }
 
 export function computeTypeId(

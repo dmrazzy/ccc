@@ -3,12 +3,17 @@ import { bytes, UnpackResult } from "@ckb-lumos/codec";
 import { Action, ActionVec, SporeAction, WitnessLayout } from "./codec";
 import { buildProtoclScript, SporeScriptInfo } from "./predefined";
 
-const SCRIPT_INFO_HASH = ccc.hashCkb("hello, cobuild");
+const SCRIPT_INFO_HASH = ccc.hashCkb(ccc.bytesFrom("hello, cobuild", "utf8"));
 
 export async function balanceAndSignTransaction(
   signer: ccc.Signer,
   tx: ccc.TransactionLike,
+  cobuildActions: UnpackResult<typeof ActionVec>,
+  feeRate: number = 1000,
 ): Promise<ccc.Transaction> {
+  if (feeRate < 1000) {
+    throw new Error("feeRate must be greater than 1000");
+  }
   const { script: lock } = await signer.getRecommendedAddressObj();
 
   // change cell
@@ -17,10 +22,11 @@ export async function balanceAndSignTransaction(
 
   // balance and sign
   await txSkeleton.completeInputsByCapacity(signer);
+  txSkeleton = injectCommonCobuildProof(txSkeleton, cobuildActions);
   await txSkeleton.completeFeeChangeToOutput(
     signer,
     txSkeleton.outputs.length - 1,
-    1000,
+    feeRate,
   );
   return await signer.signTransaction(txSkeleton);
 }
@@ -39,7 +45,7 @@ export async function findClusterCelldepByClusterId(
     clusterId,
     scriptInfo,
   );
-  const clusterCell = await client.findSingletonCellByType(clusterTypeScript);
+  const clusterCell = await client.findSingletonCellByType(clusterTypeScript, true);
   if (!clusterCell) {
     throw new Error("Cluster celldep not found of clusterId: " + clusterId);
   }

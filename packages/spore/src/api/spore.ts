@@ -7,7 +7,7 @@ import {
   findClusterCelldepByClusterId,
   injectCommonCobuildProof,
 } from "../advanced";
-import { packRawSporeData, SporeData } from "../codec";
+import { ActionVec, packRawSporeData, SporeData } from "../codec";
 import {
   computeTypeId,
   injectOneCapacityCell,
@@ -18,19 +18,23 @@ import {
   buildProtoclScript as buildProtocolScript,
   SporeScriptInfo,
 } from "../predefined";
+import { UnpackResult } from "@ckb-lumos/codec";
 
 /**
  * Create one or more Spore cells with the specified Spore data.
  *
  * @param signer who takes the responsibility to balance and sign the transaction
  * @param sporeDataCollection specific format of data required by Spore protocol with its owner, which will be replaced with signer if no provided
- * @param clusterMode how to process cluster cell
+ * @param clusterMode how to process cluster cell **(if clusterId is not provided in SporeData, this parameter will be ignored)**
  *   - lockProxy: put a cell that uses the same lock from Cluster cell in both Inputs and Outputs
  *   - clusterCell: directly put Cluster cell in Inputs and Outputs
  *   - skip: skip to provide Cluster authority, users should handle it mannually
  * @param sporeScriptInfo the script info of Spore cell, if not provided, the default script info will be used
  * @param tx the transaction skeleton, if not provided, a new one will be created
- * @returns a new transaction that contains created Spore cells
+ * @returns
+ *  - **transaction**: a new transaction that contains created Spore cells
+ *  - **actions**: cobuild actions that can be used to generate cobuild proof
+ *  - **sporeIds**: the sporeId of each created Spore cell
  */
 export async function createSporeCells(params: {
   signer: ccc.Signer;
@@ -41,12 +45,17 @@ export async function createSporeCells(params: {
   clusterMode: "lockProxy" | "clusterCell" | "skip";
   sporeScriptInfo?: SporeScriptInfo;
   tx?: ccc.Transaction;
-}): Promise<ccc.Transaction> {
+}): Promise<{
+  transaction: ccc.Transaction,
+  actions: UnpackResult<typeof ActionVec>,
+  sporeIds: ccc.Hex[],
+}> {
   const { signer, sporeDataCollection, tx, clusterMode, sporeScriptInfo } =
     params;
 
   // prepare transaction
   let actions = [];
+  let sporeIds = new Array<ccc.Hex>();
   let txSkeleton = ccc.Transaction.from(tx ?? {});
   if (txSkeleton.inputs.length === 0) {
     txSkeleton = await injectOneCapacityCell(signer, txSkeleton);
@@ -54,8 +63,10 @@ export async function createSporeCells(params: {
   const { script: lock } = await signer.getRecommendedAddressObj();
 
   // build spore cell
+  let clusterIds = new Array<ccc.Hex>();
   for (const { sporeData, sporeOwner } of sporeDataCollection) {
     const sporeId = computeTypeId(txSkeleton, txSkeleton.outputs.length);
+    sporeIds.push(sporeId);
     const sporeTypeScript = buildProtocolScript(
       signer.client,
       "spore",
@@ -71,8 +82,13 @@ export async function createSporeCells(params: {
       packedSporeData,
     );
 
+    // create spore action
+    const sporeOutput = txSkeleton.outputs[txSkeleton.outputs.length - 1];
+    const createSpore = assembleCreateSporeAction(sporeOutput, packedSporeData);
+    actions.push(createSpore);
+
     // process cluster cell accroding to the mode if provided
-    if (sporeData.clusterId) {
+    if (sporeData.clusterId && !clusterIds.includes(sporeData.clusterId)) {
       const { clusterCell, clusterCelldep } =
         await findClusterCelldepByClusterId(signer.client, sporeData.clusterId);
       switch (clusterMode) {
@@ -129,11 +145,8 @@ export async function createSporeCells(params: {
           // nothing to do here
         }
       }
+      clusterIds.push(sporeData.clusterId);
     }
-
-    const sporeOutput = txSkeleton.outputs[txSkeleton.outputs.length - 1];
-    const createSpore = assembleCreateSporeAction(sporeOutput, packedSporeData);
-    actions.push(createSpore);
   }
 
   // complete celldeps and cobuild actions
@@ -141,9 +154,12 @@ export async function createSporeCells(params: {
     signer.client,
     buildProcotolCelldep(signer.client, "spore", sporeScriptInfo),
   );
-  txSkeleton = injectCommonCobuildProof(txSkeleton, actions);
 
-  return txSkeleton;
+  return {
+    transaction: txSkeleton,
+    actions,
+    sporeIds,
+  };
 }
 
 /**
@@ -153,7 +169,9 @@ export async function createSporeCells(params: {
  * @param sporeIdCollection sporeId with its new owner
  * @param sporeScriptInfo the script info of Spore cell, if not provided, the default script info will be used
  * @param tx the transaction skeleton, if not provided, a new one will be created
- * @returns a new transaction that contains transferred Spore cells
+ * @returns
+ *  - **transaction**: a new transaction that contains transferred Spore cells
+ *  - **actions**: cobuild actions that can be used to generate cobuild proof
  */
 export async function transferSporeCells(params: {
   signer: ccc.Signer;
@@ -163,7 +181,10 @@ export async function transferSporeCells(params: {
   }[];
   sporeScriptInfo?: SporeScriptInfo;
   tx?: ccc.TransactionLike;
-}): Promise<ccc.Transaction> {
+}): Promise<{
+  transaction: ccc.Transaction,
+  actions: UnpackResult<typeof ActionVec>,
+}> {
   const { signer, sporeIdCollection, tx, sporeScriptInfo } = params;
 
   // prepare transaction
@@ -179,7 +200,7 @@ export async function transferSporeCells(params: {
       sporeScriptInfo,
     );
     const sporeCell =
-      await signer.client.findSingletonCellByType(sporeTypeScript);
+      await signer.client.findSingletonCellByType(sporeTypeScript, true);
     if (!sporeCell) {
       throw new Error("Spore cell not found of sporeId: " + sporeId);
     }
@@ -211,9 +232,11 @@ export async function transferSporeCells(params: {
     signer.client,
     buildProcotolCelldep(signer.client, "spore", sporeScriptInfo),
   );
-  txSkeleton = injectCommonCobuildProof(txSkeleton, actions);
 
-  return txSkeleton;
+  return {
+    transaction: txSkeleton,
+    actions
+  };
 }
 
 /**
@@ -223,14 +246,19 @@ export async function transferSporeCells(params: {
  * @param sporeIdCollection collection of sporeId to be melted
  * @param sporeScriptInfo the script info of Spore cell, if not provided, the default script info will be used
  * @param tx the transaction skeleton, if not provided, a new one will be created
- * @returns a new transaction that contains melted Spore cells
+ * @returns
+ *  - **transaction**: a new transaction that contains melted Spore cells
+ *  - **actions**: cobuild actions that can be used to generate cobuild proof
  */
 export async function meltSporeCells(params: {
   signer: ccc.Signer;
   sporeIdCollection: ccc.Hex[];
   sporeScriptInfo?: SporeScriptInfo;
   tx?: ccc.TransactionLike;
-}): Promise<ccc.Transaction> {
+}): Promise<{
+  transaction: ccc.Transaction,
+  actions: UnpackResult<typeof ActionVec>,
+}> {
   const { signer, sporeIdCollection, tx, sporeScriptInfo } = params;
 
   // prepare transaction
@@ -267,7 +295,9 @@ export async function meltSporeCells(params: {
     signer.client,
     buildProcotolCelldep(signer.client, "spore", sporeScriptInfo),
   );
-  txSkeleton = injectCommonCobuildProof(txSkeleton, actions);
 
-  return txSkeleton;
+  return {
+    transaction: txSkeleton,
+    actions,
+  };
 }

@@ -1,7 +1,7 @@
-import { Hex } from "@ckb-ccc/core";
+import { ccc } from "@ckb-ccc/core";
 import { blockchain } from "@ckb-lumos/base";
 import { BytesLike, molecule } from "@ckb-lumos/codec";
-import { bufferToRawString, bytifyRawString, hexify } from "./helper";
+import { bufferToRawString, hexify } from "./helper";
 
 export const MolSporeData = molecule.table(
   {
@@ -15,12 +15,12 @@ export const MolSporeData = molecule.table(
 export interface SporeData {
   contentType: string;
   content: BytesLike;
-  clusterId?: Hex;
+  clusterId?: ccc.Hex;
 }
 
 export function packRawSporeData(packable: SporeData): Uint8Array {
   return MolSporeData.pack({
-    contentType: bytifyRawString(packable.contentType),
+    contentType: ccc.bytesFrom(packable.contentType, "utf8"),
     content: packable.content,
     clusterId: packable.clusterId,
   });

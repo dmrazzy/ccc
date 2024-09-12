@@ -2,15 +2,15 @@ import { ccc } from "@ckb-ccc/core";
 import {
   assembleCreateClusterAction,
   assembleTransferClusterAction,
-  injectCommonCobuildProof,
 } from "../advanced";
-import { ClusterData, packRawClusterData } from "../codec";
+import { ActionVec, ClusterData, packRawClusterData } from "../codec";
 import { computeTypeId, injectOneCapacityCell } from "../helper";
 import {
   buildProcotolCelldep,
   buildProtoclScript,
   SporeScriptInfo,
 } from "../predefined";
+import { UnpackResult } from "@ckb-lumos/codec";
 
 /**
  * Create a new Cluster cell
@@ -20,15 +20,22 @@ import {
  * @param clusterOwner the owner of the Cluster cell, which will be replaced with signer if not provided
  * @param sporeScriptInfo the script info of Spore cell, if not provided, the default script info will be used
  * @param tx the transaction skeleton, if not provided, a new one will be created
- * @returns a new transaction that contains created Cluster cell
+ * @returns
+ *  - **transaction**: a new transaction that contains created Cluster cell
+ *  - **actions**: cobuild actions that can be used to generate cobuild proof
+ *  - **clusterId**: the id of the created Cluster cell
  */
 export async function createClusterCell(params: {
   signer: ccc.Signer;
   clusterData: ClusterData;
   clusterOwner?: ccc.ScriptLike;
-  sporeScriptInfo: SporeScriptInfo;
+  sporeScriptInfo?: SporeScriptInfo;
   tx?: ccc.TransactionLike;
-}): Promise<ccc.Transaction> {
+}): Promise<{
+  transaction: ccc.Transaction,
+  actions: UnpackResult<typeof ActionVec>,
+  clusterId: ccc.Hex,
+}> {
   const { signer, clusterData, tx, clusterOwner, sporeScriptInfo } = params;
 
   // prepare transaction
@@ -67,9 +74,12 @@ export async function createClusterCell(params: {
     signer.client,
     buildProcotolCelldep(signer.client, "cluster", sporeScriptInfo),
   );
-  txSkeleton = injectCommonCobuildProof(txSkeleton, [createCluster]);
 
-  return txSkeleton;
+  return {
+    transaction: txSkeleton,
+    actions: [createCluster],
+    clusterId,
+  };
 }
 
 /**
@@ -80,15 +90,20 @@ export async function createClusterCell(params: {
  * @param clusterOwner the new owner of the Cluster cell
  * @param sporeScriptInfo the script info of Spore cell, if not provided, the default script info will be used
  * @param tx the transaction skeleton, if not provided, a new one will be created
- * @returns a new transaction that contains transferred Cluster cell
+ * @returns
+ *  - **transaction**: a new transaction that contains transferred Cluster cell
+ *  - **actions**: cobuild actions that can be used to generate cobuild proof
  */
 export async function transferClusterCell(params: {
   signer: ccc.Signer;
   clusterId: ccc.Hex;
   clusterOwner: ccc.ScriptLike;
-  sporeScriptInfo: SporeScriptInfo;
+  sporeScriptInfo?: SporeScriptInfo;
   tx?: ccc.TransactionLike;
-}): Promise<ccc.Transaction> {
+}): Promise<{
+  transaction: ccc.Transaction,
+  actions: UnpackResult<typeof ActionVec>,
+}> {
   const { signer, clusterId, tx, clusterOwner, sporeScriptInfo } = params;
 
   // prepare transaction
@@ -102,7 +117,7 @@ export async function transferClusterCell(params: {
     sporeScriptInfo,
   );
   const clusterCell =
-    await signer.client.findSingletonCellByType(clusterTypeScript);
+    await signer.client.findSingletonCellByType(clusterTypeScript, true);
   if (!clusterCell) {
     throw new Error("Cluster cell not found of clusterId: " + clusterId);
   }
@@ -133,7 +148,9 @@ export async function transferClusterCell(params: {
     signer.client,
     buildProcotolCelldep(signer.client, "cluster", sporeScriptInfo),
   );
-  txSkeleton = injectCommonCobuildProof(txSkeleton, [transferCluster]);
 
-  return txSkeleton;
+  return {
+    transaction: txSkeleton,
+    actions: [transferCluster],
+  };
 }

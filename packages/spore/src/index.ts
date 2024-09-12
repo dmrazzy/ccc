@@ -1,4 +1,4 @@
 export * from "./advanced";
 export * from "./api/cluster";
 export * from "./api/spore";
-export * from "./dob";
+export * as dob from "./dob";
