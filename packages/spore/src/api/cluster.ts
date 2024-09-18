@@ -1,16 +1,16 @@
 import { ccc } from "@ckb-ccc/core";
+import { UnpackResult } from "@ckb-lumos/codec";
 import {
   assembleCreateClusterAction,
   assembleTransferClusterAction,
-} from "../advanced";
-import { ActionVec, ClusterData, packRawClusterData } from "../codec";
-import { computeTypeId, injectOneCapacityCell } from "../helper";
+} from "../advanced.js";
+import { ActionVec, ClusterData, packRawClusterData } from "../codec/index.js";
+import { computeTypeId, injectOneCapacityCell } from "../helper.js";
 import {
   buildProcotolCelldep,
   buildProtoclScript,
   SporeScriptInfo,
-} from "../predefined";
-import { UnpackResult } from "@ckb-lumos/codec";
+} from "../predefined.js";
 
 /**
  * Create a new Cluster cell
@@ -32,9 +32,9 @@ export async function createClusterCell(params: {
   sporeScriptInfo?: SporeScriptInfo;
   tx?: ccc.TransactionLike;
 }): Promise<{
-  transaction: ccc.Transaction,
-  actions: UnpackResult<typeof ActionVec>,
-  clusterId: ccc.Hex,
+  transaction: ccc.Transaction;
+  actions: UnpackResult<typeof ActionVec>;
+  clusterId: ccc.Hex;
 }> {
   const { signer, clusterData, tx, clusterOwner, sporeScriptInfo } = params;
 
@@ -74,6 +74,7 @@ export async function createClusterCell(params: {
     signer.client,
     buildProcotolCelldep(signer.client, "cluster", sporeScriptInfo),
   );
+  txSkeleton = await signer.prepareTransaction(txSkeleton);
 
   return {
     transaction: txSkeleton,
@@ -96,13 +97,13 @@ export async function createClusterCell(params: {
  */
 export async function transferClusterCell(params: {
   signer: ccc.Signer;
-  clusterId: ccc.Hex;
+  clusterId: ccc.HexLike;
   clusterOwner: ccc.ScriptLike;
   sporeScriptInfo?: SporeScriptInfo;
   tx?: ccc.TransactionLike;
 }): Promise<{
-  transaction: ccc.Transaction,
-  actions: UnpackResult<typeof ActionVec>,
+  transaction: ccc.Transaction;
+  actions: UnpackResult<typeof ActionVec>;
 }> {
   const { signer, clusterId, tx, clusterOwner, sporeScriptInfo } = params;
 
@@ -116,8 +117,10 @@ export async function transferClusterCell(params: {
     clusterId,
     sporeScriptInfo,
   );
-  const clusterCell =
-    await signer.client.findSingletonCellByType(clusterTypeScript, true);
+  const clusterCell = await signer.client.findSingletonCellByType(
+    clusterTypeScript,
+    true,
+  );
   if (!clusterCell) {
     throw new Error("Cluster cell not found of clusterId: " + clusterId);
   }
@@ -127,7 +130,6 @@ export async function transferClusterCell(params: {
       ...clusterCell,
     }),
   );
-  txSkeleton.witnesses.push("0x");
   txSkeleton.addOutput(
     {
       lock: clusterOwner,
@@ -148,6 +150,7 @@ export async function transferClusterCell(params: {
     signer.client,
     buildProcotolCelldep(signer.client, "cluster", sporeScriptInfo),
   );
+  txSkeleton = await signer.prepareTransaction(txSkeleton);
 
   return {
     transaction: txSkeleton,

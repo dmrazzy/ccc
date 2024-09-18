@@ -1,7 +1,7 @@
-import { Hex } from "@ckb-ccc/core";
+import { ccc } from "@ckb-ccc/core";
 import { blockchain } from "@ckb-lumos/base";
 import { bytes, BytesLike, molecule } from "@ckb-lumos/codec";
-import { bufferToRawString, bytifyRawString, hexify } from "./helper";
+import { bufferToRawString, bytifyRawString, hexify } from "./helper.js";
 
 export const MolClusterDataV1 = molecule.table(
   {
@@ -26,7 +26,7 @@ export interface ClusterDataV1 {
 export interface ClusterDataV2 {
   name: string;
   description: string;
-  mutantId?: Hex;
+  mutantId?: ccc.HexLike;
 }
 export type ClusterData = ClusterDataV2;
 

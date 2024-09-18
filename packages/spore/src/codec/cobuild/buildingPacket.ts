@@ -1,6 +1,6 @@
 import { blockchain } from "@ckb-lumos/base";
 import { BytesLike, molecule, number } from "@ckb-lumos/codec";
-import { bufferToRawString, bytifyRawString } from "../helper";
+import { bufferToRawString, bytifyRawString } from "../helper.js";
 
 /**
  * The codec for packing/unpacking UTF-8 raw strings.

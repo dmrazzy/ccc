@@ -93,19 +93,17 @@ export function buildProtoclScript(
       args,
       ...scriptInfo[procotol],
     });
-  } else {
-    if (client.addressPrefix == "ckb") {
-      return ccc.Script.from({
-        args,
-        ...SPORE_MAINNET_SCRIPTS[procotol],
-      });
-    } else {
-      return ccc.Script.from({
-        args,
-        ...SPORE_TESTNET_SCRIPTS[procotol],
-      });
-    }
   }
+  if (client.addressPrefix == "ckb") {
+    return ccc.Script.from({
+      args,
+      ...SPORE_MAINNET_SCRIPTS[procotol],
+    });
+  }
+  return ccc.Script.from({
+    args,
+    ...SPORE_TESTNET_SCRIPTS[procotol],
+  });
 }
 
 export function buildProcotolCelldep(
@@ -115,11 +113,9 @@ export function buildProcotolCelldep(
 ): ccc.CellDepInfoLike[] {
   if (scriptInfo) {
     return scriptInfo[procotol].cellDeps;
-  } else {
-    if (client.addressPrefix == "ckb") {
-      return SPORE_MAINNET_SCRIPTS[procotol].cellDeps;
-    } else {
-      return SPORE_TESTNET_SCRIPTS[procotol].cellDeps;
-    }
   }
+  if (client.addressPrefix == "ckb") {
+    return SPORE_MAINNET_SCRIPTS[procotol].cellDeps;
+  }
+  return SPORE_TESTNET_SCRIPTS[procotol].cellDeps;
 }

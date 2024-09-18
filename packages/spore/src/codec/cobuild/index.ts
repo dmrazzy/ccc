@@ -1,3 +1,3 @@
-export * from "./buildingPacket";
-export * from "./sporeAction";
-export * from "./witnessLayout";
+export * from "./buildingPacket.js";
+export * from "./sporeAction.js";
+export * from "./witnessLayout.js";

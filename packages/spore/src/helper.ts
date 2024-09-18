@@ -30,7 +30,6 @@ export async function injectOneCapacityCell(
       ...liveCell,
     }),
   );
-  txSkeleton.witnesses.push("0x");
   return txSkeleton;
 }
 

@@ -1,89 +1,71 @@
-import { Decoder } from "../helper";
+import { ccc } from "@ckb-ccc/core";
+import { Decoder } from "../helper/index.js";
 
-const TESTNET_DECODERS = {
-  DOB0: {
-    code_hash: {
-      type: "code_hash",
-      hash: "0x13cac78ad8482202f18f9df4ea707611c35f994375fa03ae79121312dda9925c",
-    },
-    type_id: null,
-    type_script: null,
-  },
-  DOB1: {
-    code_hash: {
-      type: "code_hash",
-      hash: "0xda3525549b72970b4c95f5b5749357f20d1293d335710b674f09c32f7d54b6dc",
-    },
-    type_id: {
-      type: "type_id",
-      hash: "0x784e32cef202b9d4759ea96e80d806f94051e8069fd34d761f452553700138d7",
-    },
-    type_script: {
-      type: "type_script",
-      script: {
-        code_hash:
-          "0x00000000000000000000000000000000000000000000000000545950455f4944",
-        hash_type: "type",
-        args: "0x784e32cef202b9d4759ea96e80d806f94051e8069fd34d761f452553700138d7",
-      },
-    },
-  },
-};
+export type DobType = "dob0" | "dob1";
+export type DobScriptInfo = Record<DobType, Decoder>;
 
-const MAINNET_DECODERS = {
-  DOB0: {
-    code_hash: {
-      type: "code_hash",
-      hash: "0x13cac78ad8482202f18f9df4ea707611c35f994375fa03ae79121312dda9925c",
-    },
-    type_id: null,
-    type_script: null,
+export const DOB_TESTNET_DECODERS: DobScriptInfo = Object.freeze({
+  ["dob0"]: {
+    type: "code_hash",
+    hash: "0x13cac78ad8482202f18f9df4ea707611c35f994375fa03ae79121312dda9925c",
   },
-  DOB1: {
-    code_hash: {
-      type: "code_hash",
-      hash: "0xda3525549b72970b4c95f5b5749357f20d1293d335710b674f09c32f7d54b6dc",
-    },
-    type_id: {
-      type: "type_id",
-      hash: "0x8892bea4405a1f077921799bc0f4516e0ebaef7aea0dfc6614a8898fb47d5372",
-    },
-    type_script: {
-      type: "type_script",
-      script: {
-        code_hash:
-          "0x00000000000000000000000000000000000000000000000000545950455f4944",
-        hash_type: "type",
-        args: "0x8892bea4405a1f077921799bc0f4516e0ebaef7aea0dfc6614a8898fb47d5372",
-      },
-    },
+  // another avaliable options:
+  // {
+  //   type: "type_id",
+  //   hash: "0x784e32cef202b9d4759ea96e80d806f94051e8069fd34d761f452553700138d7",
+  // }
+  // or
+  // {
+  //   type: "type_script",
+  //   script: {
+  //     code_hash:
+  //       "0x00000000000000000000000000000000000000000000000000545950455f4944",
+  //     hash_type: "type",
+  //     args: "0x784e32cef202b9d4759ea96e80d806f94051e8069fd34d761f452553700138d7",
+  //   }
+  // }
+  ["dob1"]: {
+    type: "code_hash",
+    hash: "0xda3525549b72970b4c95f5b5749357f20d1293d335710b674f09c32f7d54b6dc",
   },
-};
+});
 
-export function getTestnetDecoder(
-  dobVersion: "DOB0" | "DOB1",
-  locationType?: "code_hash" | "type_id" | "type_script",
+export const DOB_MAINNET_DECODERS: DobScriptInfo = Object.freeze({
+  ["dob0"]: {
+    type: "code_hash",
+    hash: "0x13cac78ad8482202f18f9df4ea707611c35f994375fa03ae79121312dda9925c",
+  },
+  // another avaliable options:
+  // {
+  //   type: "type_id",
+  //   hash: "0x8892bea4405a1f077921799bc0f4516e0ebaef7aea0dfc6614a8898fb47d5372",
+  // },
+  // or
+  // {
+  //   type: "type_script",
+  //   script: {
+  //     code_hash:
+  //       "0x00000000000000000000000000000000000000000000000000545950455f4944",
+  //     hash_type: "type",
+  //     args: "0x8892bea4405a1f077921799bc0f4516e0ebaef7aea0dfc6614a8898fb47d5372",
+  //   }
+  // }
+  ["dob1"]: {
+    type: "code_hash",
+    hash: "0xda3525549b72970b4c95f5b5749357f20d1293d335710b674f09c32f7d54b6dc",
+  },
+});
+
+export function getDecoder(
+  client: ccc.Client,
+  dobType: DobType,
+  dobScriptInfo?: DobScriptInfo,
 ): Decoder {
-  locationType = locationType || "code_hash";
-  const decoder = TESTNET_DECODERS[dobVersion][locationType];
-  if (decoder === null) {
-    throw new Error(
-      `Invalid decoder: ${dobVersion} does not support ${locationType}`,
-    );
+  if (dobScriptInfo) {
+    return dobScriptInfo[dobType];
   }
-  return decoder as Decoder;
-}
-
-export function getMainnetDecoder(
-  dobVersion: "DOB0" | "DOB1",
-  locationType?: "code_hash" | "type_id" | "type_script",
-): Decoder {
-  locationType = locationType || "code_hash";
-  const decoder = MAINNET_DECODERS[dobVersion][locationType];
-  if (decoder === null) {
-    throw new Error(
-      `Invalid decoder: ${dobVersion} does not support ${locationType}`,
-    );
+  if (client.addressPrefix === "ckb") {
+    return DOB_MAINNET_DECODERS[dobType];
   }
-  return decoder as Decoder;
+  return DOB_TESTNET_DECODERS[dobType];
 }

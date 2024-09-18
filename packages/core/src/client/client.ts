@@ -47,8 +47,8 @@ export enum KnownScript {
   SingleUseLock = "SingleUseLock",
   OutputTypeProxyLock = "OutputTypeProxyLock",
   NervosDao = "NervosDao",
-  TypeBurn = "TypeBurn",
-  LockProxy = "LockProxy",
+  TypeBurnLock = "TypeBurnLock",
+  LockProxyLock = "LockProxyLock",
 }
 
 /**

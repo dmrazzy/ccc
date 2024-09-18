@@ -1,6 +1,6 @@
 import { ccc } from "@ckb-ccc/core";
 import { JsonRpcTransformers } from "@ckb-ccc/core/advanced";
-import { meltSporeCells } from "..";
+import { createSporeCells, meltSporeCells } from "..";
 import { injectCommonCobuildProof } from "../advanced";
 
 describe("meltSpore [testnet]", () => {
@@ -13,14 +13,32 @@ describe("meltSpore [testnet]", () => {
       process.env.PRIVATE_KEY!,
     );
 
-    // Build transaction
-    let { transaction: tx, actions } = await meltSporeCells({
+    // Build melt transaction
+    let { transaction: meltTx, actions: meltActions } = await meltSporeCells({
       signer,
       sporeIdCollection: [
         // Change this if you have a different sporeId
-        "0xd413acd003c0913f0da53fc0ba1c3185d10fad5ebfad9bc449c87e8e7b2efc1d",
+        "0xe41a6e19b70dcca7d8d9debc98d4c3b413a0fc69e0ae258bf24fbd5f92cca819",
       ],
     });
+
+    // Provide create transaction
+    let { transaction: tx, actions: createActions } = await createSporeCells({
+      signer,
+      tx: meltTx,
+      sporeDataCollection: [
+        {
+          sporeData: {
+            contentType: "text/plain",
+            content: ccc.bytesFrom("hello, spore", "utf8"),
+          },
+        },
+      ],
+      clusterMode: "skip",
+    });
+
+    // Combine actions
+    const actions = [...meltActions, ...createActions];
 
     // Complete transaction
     tx = injectCommonCobuildProof(tx, actions);

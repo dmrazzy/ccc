@@ -1,1 +1,1 @@
-export * from "./predefined";
+export * from "./predefined.js";

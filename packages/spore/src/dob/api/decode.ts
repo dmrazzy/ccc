@@ -1,10 +1,10 @@
-import { CellOutputLike, Client, Hex, hexFrom, OutPoint } from "@ckb-ccc/core";
+import { ccc } from "@ckb-ccc/core";
 import { Axios } from "axios";
-import { getErrorByCode } from "../helper/error";
-import { RenderOutput } from "../helper/object";
+import { getErrorByCode } from "../helper/error.js";
+import { RenderOutput } from "../helper/object.js";
 
 export async function decodeDobBySporeId(
-  sporeId: Hex,
+  sporeId: ccc.HexLike,
   dobServerUrl: string,
 ): Promise<RenderOutput> {
   const axios = new Axios({
@@ -20,7 +20,7 @@ export async function decodeDobBySporeId(
       id: 0,
       jsonrpc: "2.0",
       method: "dob_decode",
-      params: [sporeId.replace(/^0x/, "")],
+      params: [ccc.hexFrom(sporeId).replace(/^0x/, "")],
     }),
   );
   const decoderResult = JSON.parse(result.data);
@@ -34,24 +34,24 @@ export async function decodeDobBySporeId(
 }
 
 export async function decodeDobBySporeCell(
-  sporeOutput: CellOutputLike,
+  sporeOutput: ccc.CellOutputLike,
   dobServerUrl: string,
 ): Promise<RenderOutput> {
   const sporeId = sporeOutput.type?.args;
   if (sporeId === undefined) {
     throw new Error("Invalid spore cell: missing spore id");
   }
-  return decodeDobBySporeId(hexFrom(sporeId), dobServerUrl);
+  return decodeDobBySporeId(ccc.hexFrom(sporeId), dobServerUrl);
 }
 
 export async function decodeDobBySporeOutpoint(
-  client: Client,
-  sporeOutpoint: OutPoint,
+  client: ccc.Client,
+  sporeOutpoint: ccc.OutPointLike,
   dobServerUrl: string,
 ): Promise<RenderOutput> {
   const liveCell = await client.getCell(sporeOutpoint);
   if (!liveCell) {
     throw new Error("Invalid spore outpoint: missing spore cell");
   }
-  return decodeDobBySporeCell(liveCell!.cellOutput, dobServerUrl);
+  return decodeDobBySporeCell(liveCell.cellOutput, dobServerUrl);
 }

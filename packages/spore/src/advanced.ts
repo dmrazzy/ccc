@@ -1,39 +1,18 @@
 import { ccc } from "@ckb-ccc/core";
 import { bytes, UnpackResult } from "@ckb-lumos/codec";
-import { Action, ActionVec, SporeAction, WitnessLayout } from "./codec";
-import { buildProtoclScript, SporeScriptInfo } from "./predefined";
+import {
+  Action,
+  ActionVec,
+  SporeAction,
+  WitnessLayout,
+} from "./codec/index.js";
+import { buildProtoclScript, SporeScriptInfo } from "./predefined.js";
 
 const SCRIPT_INFO_HASH = ccc.hashCkb(ccc.bytesFrom("hello, cobuild", "utf8"));
 
-export async function balanceAndSignTransaction(
-  signer: ccc.Signer,
-  tx: ccc.TransactionLike,
-  cobuildActions: UnpackResult<typeof ActionVec>,
-  feeRate: number = 1000,
-): Promise<ccc.Transaction> {
-  if (feeRate < 1000) {
-    throw new Error("feeRate must be greater than 1000");
-  }
-  const { script: lock } = await signer.getRecommendedAddressObj();
-
-  // change cell
-  let txSkeleton = ccc.Transaction.from(tx);
-  txSkeleton.addOutput({ lock });
-
-  // balance and sign
-  await txSkeleton.completeInputsByCapacity(signer);
-  txSkeleton = injectCommonCobuildProof(txSkeleton, cobuildActions);
-  await txSkeleton.completeFeeChangeToOutput(
-    signer,
-    txSkeleton.outputs.length - 1,
-    feeRate,
-  );
-  return await signer.signTransaction(txSkeleton);
-}
-
 export async function findClusterCelldepByClusterId(
   client: ccc.Client,
-  clusterId: ccc.Hex,
+  clusterId: ccc.HexLike,
   scriptInfo?: SporeScriptInfo,
 ): Promise<{
   clusterCell: ccc.Cell;
@@ -45,7 +24,10 @@ export async function findClusterCelldepByClusterId(
     clusterId,
     scriptInfo,
   );
-  const clusterCell = await client.findSingletonCellByType(clusterTypeScript, true);
+  const clusterCell = await client.findSingletonCellByType(
+    clusterTypeScript,
+    true,
+  );
   if (!clusterCell) {
     throw new Error("Cluster celldep not found of clusterId: " + clusterId);
   }
@@ -60,7 +42,10 @@ export function assembleCreateSporeAction(
   sporeOutput: ccc.CellOutputLike,
   sporeData: ccc.BytesLike,
 ): UnpackResult<typeof Action> {
-  const sporeType = ccc.Script.from(sporeOutput.type!);
+  if (!sporeOutput.type) {
+    throw new Error("Spore cell must have a type script");
+  }
+  const sporeType = ccc.Script.from(sporeOutput.type);
   const sporeTypeHash = sporeType.hash();
   const actionData = SporeAction.pack({
     type: "CreateSpore",
@@ -84,7 +69,10 @@ export function assembleTransferSporeAction(
   sporeInput: ccc.CellOutputLike,
   sporeOutput: ccc.CellOutputLike,
 ): UnpackResult<typeof Action> {
-  const sporeType = ccc.Script.from(sporeOutput.type!);
+  if (!sporeInput.type || !sporeOutput.type) {
+    throw new Error("Spore cell must have a type script");
+  }
+  const sporeType = ccc.Script.from(sporeOutput.type);
   const sporeTypeHash = sporeType.hash();
   const actionData = SporeAction.pack({
     type: "TransferSpore",
@@ -110,7 +98,10 @@ export function assembleTransferSporeAction(
 export function assembleMeltSporeAction(
   sporeInput: ccc.CellOutputLike,
 ): UnpackResult<typeof Action> {
-  const sporeType = ccc.Script.from(sporeInput.type!);
+  if (!sporeInput.type) {
+    throw new Error("Spore cell must have a type script");
+  }
+  const sporeType = ccc.Script.from(sporeInput.type);
   const sporeTypeHash = sporeType.hash();
   const actionData = SporeAction.pack({
     type: "MeltSpore",
@@ -133,7 +124,10 @@ export function assembleCreateClusterAction(
   clusterOutput: ccc.CellOutputLike,
   clusterData: ccc.BytesLike,
 ): UnpackResult<typeof Action> {
-  const clusterType = ccc.Script.from(clusterOutput.type!);
+  if (!clusterOutput.type) {
+    throw new Error("Cluster cell must have a type script");
+  }
+  const clusterType = ccc.Script.from(clusterOutput.type);
   const clusterTypeHash = clusterType.hash();
   const actionData = SporeAction.pack({
     type: "CreateCluster",
@@ -157,7 +151,10 @@ export function assembleTransferClusterAction(
   clusterInput: ccc.CellOutputLike,
   clusterOutput: ccc.CellOutputLike,
 ): UnpackResult<typeof Action> {
-  const clusterType = ccc.Script.from(clusterOutput.type!);
+  if (!clusterInput.type || !clusterOutput.type) {
+    throw new Error("Cluster cell must have a type script");
+  }
+  const clusterType = ccc.Script.from(clusterOutput.type);
   const clusterTypeHash = clusterType.hash();
   const actionData = SporeAction.pack({
     type: "TransferCluster",
@@ -195,7 +192,7 @@ export function injectCommonCobuildProof(
       },
     }),
   );
-  let txSkeleton = ccc.Transaction.from(tx);
+  const txSkeleton = ccc.Transaction.from(tx);
   txSkeleton.witnesses.push(ccc.hexFrom(witnessLayout));
   return txSkeleton;
 }

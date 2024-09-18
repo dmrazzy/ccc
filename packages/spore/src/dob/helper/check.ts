@@ -1,4 +1,4 @@
-import { Decoder, PatternElementDob0, PatternElementDob1 } from "./object";
+import { Decoder, PatternElementDob0, PatternElementDob1 } from "./object.js";
 
 export function checkDecoder(decoder: Decoder) {
   if (decoder.type === "code_hash" || decoder.type === "type_id") {

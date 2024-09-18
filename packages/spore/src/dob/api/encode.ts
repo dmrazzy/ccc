@@ -5,7 +5,7 @@ import {
   DNA,
   Dob0,
   Dob1,
-} from "../helper";
+} from "../helper/index.js";
 
 export function encodeDna(dna: DNA): ArrayBuffer {
   const encoder = new TextEncoder();

@@ -1,4 +1,4 @@
-export * from "./advanced";
-export * from "./api/cluster";
-export * from "./api/spore";
-export * as dob from "./dob";
+export * from "./advanced.js";
+export * from "./api/cluster.js";
+export * from "./api/spore.js";
+export * as dob from "./dob/index.js";
